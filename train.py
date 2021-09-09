@@ -75,8 +75,8 @@ def parse_arguments():
                              'oriented_normals: oriented point normals\n'
                              'max_curvature: maximum curvature\n'
                              'min_curvature: mininum curvature')
-    parser.add_argument('--use_point_stn', type=int, default=False, help='use point spatial transformer')
-    parser.add_argument('--use_feat_stn', type=int, default=False, help='use feature spatial transformer')
+    parser.add_argument('--use_point_stn', type=int, default=True, help='use point spatial transformer')
+    parser.add_argument('--use_feat_stn', type=int, default=True, help='use feature spatial transformer')
     parser.add_argument('--sym_op', type=str, default='max', help='symmetry operation')
     parser.add_argument('--point_tuple', type=int, default=1,
                         help='use n-tuples of points as input instead of single points')
