@@ -1,0 +1,12 @@
+cylinder100k
+galera100k
+netsuke100k
+cylinder100k_noise_white_1.00e-02
+galera100k_noise_white_1.00e-02
+netsuke100k_noise_white_1.00e-02
+cylinder100k_noise_white_5.00e-02
+galera100k_noise_white_5.00e-02
+netsuke100k_noise_white_5.00e-02
+cylinder100k_noise_white_1.00e-01
+galera100k_noise_white_1.00e-01
+netsuke100k_noise_white_1.00e-01
