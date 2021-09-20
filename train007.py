@@ -12,8 +12,9 @@ import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
 from tensorboardX import SummaryWriter  # https://github.com/lanpa/tensorboard-pytorch
 import utils
-from dataset import PointcloudPatchDataset, RandomPointcloudPatchSampler, SequentialShapeRandomPointcloudPatchSampler
-from pcpnet_our import PCPNet, MSPCPNet
+from dataset_our import PointcloudPatchDataset, RandomPointcloudPatchSampler, \
+    SequentialShapeRandomPointcloudPatchSampler
+from pcpnet007 import PCPNet, MSPCPNet
 import numpy as np
 import cv2
 from skimage.measure import label, regionprops
@@ -60,7 +61,7 @@ def parse_arguments():
                              'random_shape_consecutive: random over the entire dataset, but patches of a shape remain consecutive (shapes and patches inside a shape are permuted)')
     parser.add_argument('--identical_epochs', type=int, default=False,
                         help='use same patches in each epoch, mainly for debugging')
-    parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
+    parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='gradient descent momentum')
     parser.add_argument('--use_pca', type=int, default=False,
                         help='Give both inputs and ground truth in local PCA coordinate frame')
@@ -87,7 +88,7 @@ def parse_arguments():
 
 def train_pcpnet(opt):
     # opt.gpu_idx = "1,2,3"
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 这里的赋值必须是字符串，list会报错
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'  # 这里的赋值必须是字符串，list会报错
     # device_ids = range(torch.cuda.device_count())
     device = torch.device("cpu" if opt.gpu_idx < 0 else "cuda:%d" % opt.gpu_idx)
 
@@ -96,9 +97,9 @@ def train_pcpnet(opt):
     blue = lambda x: '\033[94m' + x + '\033[0m'
 
     log_dirname = os.path.join(opt.logdir, opt.name)
-    params_filename = os.path.join(opt.outdir, '%s_stn_params.pth' % (opt.name))
-    model_filename = os.path.join(opt.outdir, '%s_stn_model.pth' % (opt.name))
-    desc_filename = os.path.join(opt.outdir, '%s_stn_description.txt' % (opt.name))
+    params_filename = os.path.join(opt.outdir, '%s_stn007_params.pth' % (opt.name))
+    model_filename = os.path.join(opt.outdir, '%s_stn007_model.pth' % (opt.name))
+    desc_filename = os.path.join(opt.outdir, '%s_stn007_description.txt' % (opt.name))
 
     if os.path.exists(log_dirname) or os.path.exists(model_filename):
         # response = input('A training run named "%s" already exists, overwrite? (y/n) ' % (opt.name))
@@ -317,27 +318,15 @@ def train_pcpnet(opt):
             points = data[0]
             points = points.transpose(2, 1)
             points = points.cuda()
-            target0 = data[1].cuda()
+            targetc = data[1].cuda()
 
             optimizer.zero_grad()
-            pred_map, _, target, trans, _, _ = pcpnet(grid_norm, weight_null, points, target0, M)
+            pred_map, _, target, trans, _, _ = pcpnet(grid_norm, weight_null, points, targetc, M)
 
             # 转target
             normal_map = norm_to_grid(target, opt.batchSize, M).cuda()
             normal_map = normal_map * index_del
-            # zero gradients
-            optimizer.zero_grad()
-
             loss = torch.nn.functional.binary_cross_entropy_with_logits(pred_map, normal_map)
-            # pred = reverse_mapping(pred_map, grid_norm[0, :, :])
-            # loss1 = compute_loss(
-            #     pred=pred, target=target,
-            #     outputs=opt.outputs,
-            #     output_pred_ind=output_pred_ind,
-            #     output_target_ind=output_target_ind,
-            #     output_loss_weight=output_loss_weight,
-            #     patch_rot=trans if opt.use_point_stn else None,
-            #     normal_loss=opt.normal_loss)
 
             loss.backward()
             # parameter optimization step
@@ -350,7 +339,7 @@ def train_pcpnet(opt):
                 opt.name, epoch, train_batchind, train_num_batch - 1, green('train'), loss.item()))
             train_writer.add_scalar('loss', loss.item(),
                                     (epoch + train_fraction_done) * train_num_batch * opt.batchSize)
-
+            # while 0:
             while test_fraction_done <= train_fraction_done and test_batchind + 1 < test_num_batch:
                 # set to evaluation mode
                 pcpnet.eval()
@@ -362,15 +351,27 @@ def train_pcpnet(opt):
                 points = points.transpose(2, 1)
                 points = points.cuda()
                 target = data[1].cuda()
-
                 # forward pass
                 with torch.no_grad():
                     # pred_map, trans, _, _ = pcpnet(points, weight, M)
+                    # pred_map, _, _, trans, _, _ = pcpnet(grid_norm, weight_null, points, None, M)
                     pred_map, _, _, trans, _, _ = pcpnet(grid_norm, weight_null, points, None, M)
                 key_points = torch.sigmoid(pred_map)
                 key_points = key_points * index_del
                 pred = reverse_mapping(key_points, grid_norm[0, :, :])
 
+                # tt = (dist < 0.01).type(torch.uint8)
+                # num = tt.sum(axis=-1)
+                # num[:, index_null] = 0
+                # point_num = num.reshape(opt.batchSize, M, M)
+                # point_num = point_num.cpu().numpy()
+                # uu=35
+                # t1 = key_points[uu, :, :].detach().cpu().numpy()
+                # t2 = normal_map[uu, :, :].detach().cpu().numpy()
+                # np.savetxt('points.txt',data[0][uu,:,:].numpy())
+                # np.savetxt('normal_map.txt', np.flipud(t2))
+                # np.savetxt('pred_map.txt', np.flipud(t1))
+                # np.savetxt('pointnum.txt',np.flipud(point_num[uu,:,:]),fmt='%s')
                 loss_norm = compute_loss(
                     pred=pred, target=target,
                     outputs=opt.outputs,
@@ -457,7 +458,6 @@ def compute_loss(pred, target, outputs, output_pred_ind, output_target_ind, outp
 
         else:
             raise ValueError('Unsupported output type: %s' % (o))
-
     return loss
 
 

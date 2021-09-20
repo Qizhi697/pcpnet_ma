@@ -10,7 +10,7 @@ import torch.utils.data
 from datasetorigin import PointcloudPatchDataset, SequentialPointcloudPatchSampler, \
     SequentialShapeRandomPointcloudPatchSampler
 from pcpnet001 import PCPNet, MSPCPNet
-from train001 import reverse_mapping
+from train001 import reverse_mapping_cell_determined8k  # this is 8-no_error, you can replace with function: reverse_mapping_cell_determined when compute 1-no_error
 
 
 def parse_arguments():
@@ -18,7 +18,7 @@ def parse_arguments():
 
     # naming / file handling
     parser.add_argument('--indir', type=str, default='./pclouds', help='input folder (point clouds)')
-    parser.add_argument('--outdir', type=str, default='./results_stn2',
+    parser.add_argument('--outdir', type=str, default='./results_stncell8k',
                         help='output folder (estimated point cloud properties)')
     parser.add_argument('--dataset', type=str, default='testset_all.txt', help='shape set file name')
     parser.add_argument('--modeldir', type=str, default='./models', help='model folder')
@@ -46,7 +46,7 @@ def parse_arguments():
 
 
 def eval_pcpnet(opt):
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 这里的赋值必须是字符串，list会报错
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'  # 这里的赋值必须是字符串，list会报错
     opt.models = opt.models.split()
 
     if opt.seed < 0:
@@ -185,16 +185,17 @@ def eval_pcpnet(opt):
             #
             # data_trans = data_trans.to(device)
 
-            points = data[0]
+            points = data[0].cuda()
+            targetc = data[1].cuda()
             points = points.transpose(2, 1).cuda()
 
             with torch.no_grad():
                 # pred, trans, _, _ = regressor(points)
                 pred_map, _, _, trans, _, _ = regressor(grid_norm, weight_null, points, None, M)
-
+            targetc = torch.bmm(targetc.unsqueeze(1), trans).squeeze(dim=1)
             key_points = torch.sigmoid(pred_map)
             key_points = key_points * index_del[:points.size(0), :, :]
-            pred = reverse_mapping(key_points, grid_norm[0, :, :])
+            pred = reverse_mapping_cell_determined8k(key_points, grid_norm[0, :, :], targetc, index_del)
 
             # post-processing of the prediction
             for oi, o in enumerate(trainopt.outputs):

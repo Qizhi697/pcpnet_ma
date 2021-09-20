@@ -281,6 +281,8 @@ class PointcloudPatchDataset(data.Dataset):
         # get neighboring points (within euclidean distance patch_radius)
         patch_pts = torch.zeros(self.points_per_patch * len(self.patch_radius_absolute[shape_ind]), 3,
                                 dtype=torch.float)
+        normal_p = torch.zeros(self.points_per_patch * len(self.patch_radius_absolute[shape_ind]), 3,
+                                dtype=torch.float)
         # patch_pts_valid = torch.ByteTensor(self.points_per_patch*len(self.patch_radius_absolute[shape_ind])).zero_()
         patch_pts_valid = []
         scale_ind_range = np.zeros([len(self.patch_radius_absolute[shape_ind]), 2], dtype='int')
@@ -310,7 +312,7 @@ class PointcloudPatchDataset(data.Dataset):
 
             # convert points to torch tensors
             patch_pts[start:end, :] = torch.from_numpy(shape.pts[patch_point_inds, :])
-
+            normal_p[start:end, :] = torch.from_numpy(shape.normals[patch_point_inds, :])
             # center patch (central point at origin - but avoid changing padded zeros)
             if self.center == 'mean':
                 patch_pts[start:end, :] = patch_pts[start:end, :] - patch_pts[start:end, :].mean(0)
@@ -391,7 +393,7 @@ class PointcloudPatchDataset(data.Dataset):
                 patch_feats = patch_feats + (patch_curv[1:2],)
             else:
                 raise ValueError('Unknown patch feature: %s' % pfeat)
-        return (patch_pts,) + patch_feats + (trans,)
+        return (patch_pts,) + patch_feats + (normal_p,) + (trans,)
         # return (patch_pts,) + patch_feats + (trans,) + (shape_ind,) + (patch_ind,) + (patch_point_inds,)
 
     def __len__(self):

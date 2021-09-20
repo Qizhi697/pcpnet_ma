@@ -7,9 +7,9 @@ import numpy as np
 import torch
 import torch.nn.parallel
 import torch.utils.data
-from datasetorigin import PointcloudPatchDataset, SequentialPointcloudPatchSampler, \
+from dataset_our import PointcloudPatchDataset, SequentialPointcloudPatchSampler, \
     SequentialShapeRandomPointcloudPatchSampler
-from pcpnet001 import PCPNet, MSPCPNet
+from pcpnet_normal import PCPNet, MSPCPNet
 from train001 import reverse_mapping
 
 
@@ -18,11 +18,11 @@ def parse_arguments():
 
     # naming / file handling
     parser.add_argument('--indir', type=str, default='./pclouds', help='input folder (point clouds)')
-    parser.add_argument('--outdir', type=str, default='./results_stn2',
+    parser.add_argument('--outdir', type=str, default='./results_stnn',
                         help='output folder (estimated point cloud properties)')
     parser.add_argument('--dataset', type=str, default='testset_all.txt', help='shape set file name')
     parser.add_argument('--modeldir', type=str, default='./models', help='model folder')
-    parser.add_argument('--models', type=str, default='my_single_scale_normal_stn2',
+    parser.add_argument('--models', type=str, default='my_single_scale_normal_stnn',
                         help='names of trained models, can evaluate multiple models')
     parser.add_argument('--modelpostfix', type=str, default='_model.pth', help='model file postfix')
     parser.add_argument('--parmpostfix', type=str, default='_params.pth', help='parameter file postfix')
@@ -46,7 +46,7 @@ def parse_arguments():
 
 
 def eval_pcpnet(opt):
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 这里的赋值必须是字符串，list会报错
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'  # 这里的赋值必须是字符串，list会报错
     opt.models = opt.models.split()
 
     if opt.seed < 0:
@@ -85,7 +85,8 @@ def eval_pcpnet(opt):
                 raise ValueError('Unknown output: %s' % (o))
 
         dataset = PointcloudPatchDataset(
-            root=opt.indir, shape_list_filename=opt.dataset,
+            root=opt.indir,
+            shape_list_filename=opt.dataset,
             patch_radius=trainopt.patch_radius,
             points_per_patch=trainopt.points_per_patch,
             patch_features=['normal'],
@@ -185,12 +186,13 @@ def eval_pcpnet(opt):
             #
             # data_trans = data_trans.to(device)
 
-            points = data[0]
+            points = data[0].cuda()
+            targetp = data[2].cuda()
             points = points.transpose(2, 1).cuda()
 
             with torch.no_grad():
                 # pred, trans, _, _ = regressor(points)
-                pred_map, _, _, trans, _, _ = regressor(grid_norm, weight_null, points, None, M)
+                pred_map, _, target, trans, _, _ = regressor(grid_norm, weight_null, points, None, targetp, M)
 
             key_points = torch.sigmoid(pred_map)
             key_points = key_points * index_del[:points.size(0), :, :]
@@ -207,8 +209,8 @@ def eval_pcpnet(opt):
                         o_pred[:, :] = torch.bmm(o_pred.unsqueeze(1), trans.transpose(2, 1)).squeeze(dim=1)
 
                     # if trainopt.use_pca:
-                    #     # transform predictions with inverse pca rotation (back to world space)
-                    #     o_pred[:, :] = torch.bmm(o_pred.unsqueeze(1), data_trans.transpose(2, 1)).squeeze(dim=1)
+                        # transform predictions with inverse pca rotation (back to world space)
+                        # o_pred[:, :] = torch.bmm(o_pred.unsqueeze(1), data_trans.transpose(2, 1)).squeeze(dim=1)
 
                     # normalize normals
                     o_pred_len = torch.max(o_pred.new_tensor([sys.float_info.epsilon * 100]),

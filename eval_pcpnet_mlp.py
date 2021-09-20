@@ -7,10 +7,11 @@ import numpy as np
 import torch
 import torch.nn.parallel
 import torch.utils.data
-from datasetorigin import PointcloudPatchDataset, SequentialPointcloudPatchSampler, \
+from dataset_our import PointcloudPatchDataset, SequentialPointcloudPatchSampler, \
     SequentialShapeRandomPointcloudPatchSampler
-from pcpnet001 import PCPNet, MSPCPNet
+from pcp_yz001 import PCPNet, MSPCPNet
 from train001 import reverse_mapping
+from train_yz001 import compute_loss
 
 
 def parse_arguments():
@@ -18,11 +19,11 @@ def parse_arguments():
 
     # naming / file handling
     parser.add_argument('--indir', type=str, default='./pclouds', help='input folder (point clouds)')
-    parser.add_argument('--outdir', type=str, default='./results_stn2',
+    parser.add_argument('--outdir', type=str, default='./results_stnmlp',
                         help='output folder (estimated point cloud properties)')
     parser.add_argument('--dataset', type=str, default='testset_all.txt', help='shape set file name')
     parser.add_argument('--modeldir', type=str, default='./models', help='model folder')
-    parser.add_argument('--models', type=str, default='my_single_scale_normal_stn2',
+    parser.add_argument('--models', type=str, default='my_single_scale_normal_stnmlp',
                         help='names of trained models, can evaluate multiple models')
     parser.add_argument('--modelpostfix', type=str, default='_model.pth', help='model file postfix')
     parser.add_argument('--parmpostfix', type=str, default='_params.pth', help='parameter file postfix')
@@ -46,7 +47,7 @@ def parse_arguments():
 
 
 def eval_pcpnet(opt):
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 这里的赋值必须是字符串，list会报错
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'  # 这里的赋值必须是字符串，list会报错
     opt.models = opt.models.split()
 
     if opt.seed < 0:
@@ -186,15 +187,16 @@ def eval_pcpnet(opt):
             # data_trans = data_trans.to(device)
 
             points = data[0]
-            points = points.transpose(2, 1).cuda()
+            points = points.transpose(2, 1)
+            points = points.cuda()
+            targetc = data[1].cuda()
 
             with torch.no_grad():
-                # pred, trans, _, _ = regressor(points)
-                pred_map, _, _, trans, _, _ = regressor(grid_norm, weight_null, points, None, M)
+                pred, _, _, trans, _, _ = regressor(grid_norm, weight_null, points, targetc, M)
 
-            key_points = torch.sigmoid(pred_map)
-            key_points = key_points * index_del[:points.size(0), :, :]
-            pred = reverse_mapping(key_points, grid_norm[0, :, :])
+            # key_points = torch.sigmoid(pred_map)
+            # key_points = key_points * index_del[:points.size(0), :, :]
+            # pred = reverse_mapping(key_points, grid_norm[0, :, :])
 
             # post-processing of the prediction
             for oi, o in enumerate(trainopt.outputs):
@@ -205,10 +207,6 @@ def eval_pcpnet(opt):
                         # transform predictions with inverse transform
                         # since we know the transform to be a rotation (QSTN), the transpose is the inverse
                         o_pred[:, :] = torch.bmm(o_pred.unsqueeze(1), trans.transpose(2, 1)).squeeze(dim=1)
-
-                    # if trainopt.use_pca:
-                    #     # transform predictions with inverse pca rotation (back to world space)
-                    #     o_pred[:, :] = torch.bmm(o_pred.unsqueeze(1), data_trans.transpose(2, 1)).squeeze(dim=1)
 
                     # normalize normals
                     o_pred_len = torch.max(o_pred.new_tensor([sys.float_info.epsilon * 100]),
@@ -237,7 +235,10 @@ def eval_pcpnet(opt):
                 shape_patch_offset:shape_patch_offset + min(shape_patches_remaining, batch_patches_remaining),
                 :] = pred[
                      batch_offset:batch_offset + min(shape_patches_remaining, batch_patches_remaining), :]
-
+                loss_norm = 0
+                loss_norm += torch.min((pred - targetc).pow(2).sum(1),
+                                       (pred + targetc).pow(2).sum(1)).mean()
+                print('loss: %f' % (loss_norm.item()))
                 batch_offset = batch_offset + min(shape_patches_remaining, batch_patches_remaining)
                 shape_patch_offset = shape_patch_offset + min(shape_patches_remaining, batch_patches_remaining)
 

@@ -182,16 +182,20 @@ class PointNetfeat(nn.Module):
             x = torch.bmm(x, trans)
             x = x.transpose(2, 1)
             x = x.contiguous().view(x.size(0), 3 * self.point_tuple, -1)
-            points = x.clone()
             if t0 is not None:
-                target = torch.bmm(t0.unsqueeze(1), trans).squeeze(1)
+                target_c = torch.bmm(t0.unsqueeze(1), trans).squeeze(1)
+                adjust_ind = torch.nonzero(target_c[:, 2] < 0)
+                target_c[adjust_ind, :] = -target_c[adjust_ind, :]
             else:
-                target = t0
+                target_c = t0
         else:
             trans = None
-            points = x.clone()
-            target = t0
+            target_c = t0
+            if target_c is not None:
+                adjust_ind = torch.nonzero(target_c[:, 2] < 0)
+                target_c[adjust_ind, :] = -target_c[adjust_ind, :]
 
+        points = x.clone()
         # mlp (64,64)
         x = F.relu(self.bn0a(self.conv0a(x)))
         x = F.relu(self.bn0b(self.conv0b(x)))
@@ -219,7 +223,7 @@ class PointNetfeat(nn.Module):
         else:
             pointfvals = None  # so the intermediate result can be forgotten if it is not needed
 
-        return x, points, target, trans, trans2, pointfvals
+        return x, points, target_c, trans, trans2, pointfvals
 
 
 class PCPNet(nn.Module):
@@ -257,14 +261,10 @@ class PCPNet(nn.Module):
             new_col = col + 1
         return new_row, new_col
 
-    def forward(self, grid_norm, weight_null, x1, t0, M):
-        feat, points, target, trans, trans2, pointfvals = self.feat(x1, t0)
-        if target is not None:
-            adjust_ind = torch.nonzero(target[:, 2] < 0)
-            points[adjust_ind, 2, :] = -points[adjust_ind, 2, :]
-            target[adjust_ind, 2] = -target[adjust_ind, 2]
+    def forward(self, grid_norm, weight_null, x1, tc, M):
+        feat, points, target_c, trans, trans2, pointfvals = self.feat(x1, tc)
         dist = torch.abs(torch.bmm(grid_norm[:points.size(0), :, :], points))
-        mean = (torch.ones(points.size(0), M ** 2, 1) * 0.01).cuda()
+        mean = (torch.ones(points.size(0), M ** 2, 1) * 0.03).cuda()
         weight = torch.exp(-dist ** 2 / (mean ** 2))
         weight = torch.mul(weight_null, weight).transpose(2, 1)
         x = torch.bmm(feat, weight)
@@ -273,7 +273,7 @@ class PCPNet(nn.Module):
         x = self.convmap2(x)
         x = x.squeeze()
 
-        return x, points, target, trans, trans2, pointfvals
+        return x, points, target_c, trans, trans2, pointfvals
 
 
 class MSPCPNet(nn.Module):
