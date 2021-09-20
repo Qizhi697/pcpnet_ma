@@ -13,6 +13,8 @@ Note:
 
 2.`**` represents different distance mean(0.01,0.03,0.07)
 
+Experiment Result: `https://www.jianshu.com/p/a0ade2862c07`
+
 
 # PCPNet
 This is our implementation of [PCPNet](http://geometry.cs.ucl.ac.uk/projects/2018/pcpnet/),
