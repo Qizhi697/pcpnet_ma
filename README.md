@@ -1,9 +1,17 @@
-#Intruduction_ma
-our_stn : train**.py  pcpnet**.py  eval_pcpnet.py    Note:"**" represents different distance mean(0.01,0.03,0.07)
-GTcell: train_yz**.py  pcp_yz**.py  eval_pcpnet_mlp.py
-with normal: train_normal.py  pcpnet_normal.py
-1-no_error and 8-no_error: eval_oconet_cell.py (ues function reverse_mapping_cell_determined and reverse_mapping_cell_determined8k respectively)
-eval___ function computes normal results, you need compute angel loss by test.py with normal results and GT normals
+# Intruduction_ma
+**our_stn** : `train**.py`  `pcpnet**.py`  `eval_pcpnet.py`
+
+**GTcell** : `train_yz**.py`  `pcp_yz**.py`  `eval_pcpnet_mlp.py`
+
+**with normal** : `train_normal.py`  `pcpnet_normal.py`
+
+**1-no_error and 8-no_error** : `eval_pcpnet_cell.py` (ues function reverse_mapping_cell_determined and reverse_mapping_cell_determined8k respectively)
+
+Note:  
+
+1.`eval___` function computes normal results, you need compute angel loss by `test.py` with normal results and GT normals
+
+2.`**` represents different distance mean(0.01,0.03,0.07)
 
 
 # PCPNet
