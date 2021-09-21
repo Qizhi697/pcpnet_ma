@@ -5,7 +5,7 @@
 
 **with normal** : `train_normal.py`  `pcpnet_normal.py`
 
-**1-no_error and 8-no_error** : `eval_pcpnet_cell.py` (ues function reverse_mapping_cell_determined and reverse_mapping_cell_determined8k respectively)
+**1-no_error and 8-no_error** : `eval_pcpnet_cell.py` (use function reverse_mapping_cell_determined and reverse_mapping_cell_determined8k respectively)
 
 Note:  
 
